@@ -53,7 +53,7 @@ export default function Canvas({
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, []);
 
-  const getLayerName = (layerId: string) => layers.find((l) => l.id === layerId)?.name ?? 'Layer';
+  const getLayerColor = (layerId: string) => layers.find((l) => l.id === layerId)?.color ?? '#999';
 
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).dataset.type === 'node') return;
@@ -161,7 +161,7 @@ export default function Canvas({
               key={node.id}
               className={`node ${isSelected ? 'selected' : ''}`}
               data-type="node"
-              style={{ transform: `translate(${x}px, ${y}px)` }}
+              style={{ transform: `translate(${x}px, ${y}px)`, borderColor: getLayerColor(node.layerId) }}
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
               onClick={(e) => {
                 e.stopPropagation();
@@ -172,9 +172,7 @@ export default function Canvas({
                 setEditingNodeId(node.id);
               }}
             >
-              <div className="node-label-row">
-                <span className="node-layer-chip">{getLayerName(node.layerId)}</span>
-              </div>
+              <div className="node-header" style={{ background: getLayerColor(node.layerId) }} />
               {isEditing ? (
                 <textarea
                   autoFocus

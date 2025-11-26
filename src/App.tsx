@@ -1,13 +1,13 @@
 /**
  * README (quickstart)
  * Run: npm install && npm run dev
- * Usage: use the left sidebar to manage layers (add/rename/delete/toggle visibility). Select a layer, then use "Add node" in the top toolbar to create sticky notes on that layer. Drag nodes to reposition them on the canvas. Toggle "Connect mode" to click two nodes and create a connection line. Use zoom controls or Ctrl + mouse wheel on the canvas to zoom/pan. Export/Import buttons let you save or load the current diagram as JSON.
+ * Usage: use the left sidebar to manage layers (add/rename/delete/toggle visibility). Select a layer, then use "Add node" in the top toolbar to create sticky notes on that layer. Drag nodes to reposition them on the canvas. Toggle "Connect mode" to click two nodes and create a connection line. Use Ctrl + mouse wheel on the canvas to zoom/pan.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import SidebarLayers from './components/SidebarLayers';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
-import { Connection, DiagramState, Layer, NodeItem, Viewport } from './types';
+import { Connection, Layer, NodeItem, Viewport } from './types';
 import './styles.css';
 
 const defaultLayers: Layer[] = [
@@ -15,18 +15,6 @@ const defaultLayers: Layer[] = [
   { id: 'frontstage', name: 'Frontstage (product / UI)', color: '#3b82f6', visible: true },
   { id: 'backstage', name: 'Backstage / internal actions', color: '#10b981', visible: true },
 ];
-
-const presets: Record<string, Layer[]> = {
-  blueprint: [
-    { id: 'customer', name: 'Customer actions', color: '#f59e0b', visible: true },
-    { id: 'frontstage', name: 'Frontstage (product / UI)', color: '#3b82f6', visible: true },
-    { id: 'backstage', name: 'Backstage / internal actions', color: '#10b981', visible: true },
-  ],
-  journey: [
-    { id: 'user', name: 'User', color: '#e11d48', visible: true },
-    { id: 'system', name: 'System', color: '#6366f1', visible: true },
-  ],
-};
 
 const initialViewport: Viewport = {
   scale: 1,
@@ -104,19 +92,6 @@ function App() {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)));
   };
 
-  const handleReorderLayer = (id: string, direction: 'up' | 'down') => {
-    setLayers((prev) => {
-      const index = prev.findIndex((l) => l.id === id);
-      if (index === -1) return prev;
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
-      const updated = [...prev];
-      const [moved] = updated.splice(index, 1);
-      updated.splice(targetIndex, 0, moved);
-      return updated;
-    });
-  };
-
   const handleAddNode = () => {
     const selectedLayer = layers.find((l) => l.id === selectedLayerId) ?? layers[0];
     if (!selectedLayer) return;
@@ -167,14 +142,22 @@ function App() {
       handleSelectNode(id);
       return;
     }
+
     if (!pendingFromNode) {
       setPendingFromNode(id);
       handleSelectNode(id);
-    } else {
-      handleCreateConnection(pendingFromNode, id);
-      setPendingFromNode(null);
-      setConnectMode(false);
+      return;
     }
+
+    if (pendingFromNode === id) {
+      setPendingFromNode(id);
+      handleSelectNode(id);
+      return;
+    }
+
+    handleCreateConnection(pendingFromNode, id);
+    setPendingFromNode(id);
+    handleSelectNode(id);
   };
 
   const handleZoom = (delta: number, anchor?: { x: number; y: number }) => {
@@ -189,23 +172,6 @@ function App() {
         offsetY: anchor.y - canvasY * newScale,
       };
     });
-  };
-
-  const handleImport = (data: DiagramState) => {
-    setLayers(data.layers);
-    setNodes(data.nodes);
-    setConnections(data.connections);
-    setViewport(data.viewport ?? initialViewport);
-    setSelectedLayerId(data.layers[0]?.id ?? defaultLayers[0].id);
-  };
-
-  const handleApplyPreset = (key: string) => {
-    const preset = presets[key];
-    if (!preset) return;
-    setLayers(preset);
-    setNodes([]);
-    setConnections([]);
-    setSelectedLayerId(preset[0]?.id ?? '');
   };
 
   const visibleNodes = nodes.filter((n) => visibleLayerIds.has(n.layerId));
@@ -225,7 +191,6 @@ function App() {
         onRenameLayer={handleRenameLayer}
         onDeleteLayer={handleDeleteLayer}
         onToggleVisibility={handleToggleLayerVisibility}
-        onReorderLayer={handleReorderLayer}
       />
       <div className="main">
         <Toolbar
@@ -236,21 +201,6 @@ function App() {
             setConnectMode((prev) => !prev);
           }}
           onAddNode={handleAddNode}
-          onZoomIn={() => handleZoom(0.1)}
-          onZoomOut={() => handleZoom(-0.1)}
-          onResetView={() => setViewport(initialViewport)}
-          onExport={() => {
-            const payload: DiagramState = { layers, nodes, connections, viewport };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'diagram.json';
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          onImport={handleImport}
-          onApplyPreset={handleApplyPreset}
         />
         <Canvas
           layers={layers}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Layer } from '../types';
 import '../styles.css';
 
@@ -9,7 +10,6 @@ type Props = {
   onRenameLayer: (id: string, name: string) => void;
   onDeleteLayer: (id: string) => void;
   onToggleVisibility: (id: string) => void;
-  onReorderLayer: (id: string, direction: 'up' | 'down') => void;
 };
 
 export default function SidebarLayers({
@@ -20,60 +20,67 @@ export default function SidebarLayers({
   onRenameLayer,
   onDeleteLayer,
   onToggleVisibility,
-  onReorderLayer,
 }: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <h2>Layers</h2>
-        <button className="ghost" onClick={onAddLayer} aria-label="Add layer">
+    <aside className="sidebar minimal">
+      <div className="sidebar-header simple">
+        <div>
+          <p className="sidebar-label">Layers</p>
+          <h2>Layers</h2>
+        </div>
+        <button className="ghost add" onClick={onAddLayer} aria-label="Add layer">
           +
         </button>
       </div>
-      <div className="layer-list">
-        {layers.map((layer, index) => (
+      <div className="layer-list stripped">
+        {layers.map((layer) => (
           <div
             key={layer.id}
-            className={`layer-item ${selectedLayerId === layer.id ? 'selected' : ''}`}
+            className={`layer-item compact ${selectedLayerId === layer.id ? 'selected' : ''}`}
             onClick={() => onSelectLayer(layer.id)}
-            style={{ borderLeftColor: layer.color }}
           >
-            <div className="layer-row">
+            <button
+              className={`layer-visibility ${layer.visible ? '' : 'off'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleVisibility(layer.id);
+              }}
+              aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+            >
+              {layer.visible ? '👁' : '⛶'}
+            </button>
+            {editingId === layer.id ? (
               <input
-                className="layer-name"
+                className="layer-name-display"
                 value={layer.name}
                 onChange={(e) => onRenameLayer(layer.id, e.target.value)}
+                onBlur={() => setEditingId(null)}
                 onClick={(e) => e.stopPropagation()}
+                autoFocus
               />
-              <div className="layer-actions" onClick={(e) => e.stopPropagation()}>
-                <button
-                  className={`ghost ${layer.visible ? '' : 'muted'}`}
-                  onClick={() => onToggleVisibility(layer.id)}
-                  title={layer.visible ? 'Hide layer' : 'Show layer'}
-                >
-                  {layer.visible ? '👁️' : '🚫'}
-                </button>
-                <button
-                  className="ghost"
-                  onClick={() => onReorderLayer(layer.id, 'up')}
-                  disabled={index === 0}
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  className="ghost"
-                  onClick={() => onReorderLayer(layer.id, 'down')}
-                  disabled={index === layers.length - 1}
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button className="ghost danger" onClick={() => onDeleteLayer(layer.id)} title="Delete layer">
-                  🗑
-                </button>
+            ) : (
+              <div
+                className="layer-name-text"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingId(layer.id);
+                }}
+              >
+                {layer.name || 'Layer'}
               </div>
-            </div>
+            )}
+            <button
+              className="layer-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteLayer(layer.id);
+              }}
+              aria-label="Delete layer"
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>
