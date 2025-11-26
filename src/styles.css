@@ -365,3 +365,53 @@ button.danger {
   outline: none;
   background: transparent;
 }
+
+.connection-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.connection-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid #111827;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  cursor: crosshair;
+}
+
+.node:hover .connection-handle,
+.node:focus-within .connection-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.connection-handle.top {
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.connection-handle.right {
+  top: 50%;
+  right: 0;
+  transform: translate(50%, -50%);
+}
+
+.connection-handle.bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 50%);
+}
+
+.connection-handle.left {
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+}
