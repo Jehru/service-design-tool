@@ -20,6 +20,8 @@ export type Connection = {
   label?: string;
 };
 
+export type ConnectionHandle = 'top' | 'right' | 'bottom' | 'left';
+
 export type Viewport = {
   scale: number;
   offsetX: number;
