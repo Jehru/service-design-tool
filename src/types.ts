@@ -16,7 +16,8 @@ export type NodeItem = {
 export type Connection = {
   id: string;
   fromNodeId: string;
-  toNodeId: string;
+  toNodeId?: string;
+  looseEnd?: { x: number; y: number };
   label?: string;
 };
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Connection, Layer, NodeItem, Viewport } from '../types';
 
 const NODE_WIDTH = 180;
@@ -9,6 +9,8 @@ type Props = {
   nodes: NodeItem[];
   allNodes: NodeItem[];
   connections: Connection[];
+  connectMode: boolean;
+  pendingFromNodeId: string | null;
   selectedNodeId: string | null;
   selectedConnectionId: string | null;
   viewport: Viewport;
@@ -16,6 +18,9 @@ type Props = {
   onNodeDrag: (id: string, x: number, y: number) => void;
   onNodeTextChange: (id: string, text: string) => void;
   onConnectionClick: (id: string) => void;
+  onCreateLooseConnection: (fromId: string, point: { x: number; y: number }) => void;
+  onLooseConnectionDrag: (id: string, point: { x: number; y: number }) => void;
+  onLooseConnectionFinalize: (id: string, nodeId: string) => void;
   onViewportChange: (viewport: Viewport) => void;
   onDeselect: () => void;
   onWheelZoom: (delta: number, anchor: { x: number; y: number }) => void;
@@ -26,6 +31,8 @@ export default function Canvas({
   nodes,
   allNodes,
   connections,
+  connectMode,
+  pendingFromNodeId,
   selectedNodeId,
   selectedConnectionId,
   viewport,
@@ -33,36 +40,86 @@ export default function Canvas({
   onNodeDrag,
   onNodeTextChange,
   onConnectionClick,
+  onCreateLooseConnection,
+  onLooseConnectionDrag,
+  onLooseConnectionFinalize,
   onViewportChange,
   onDeselect,
   onWheelZoom,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [draggingLooseConnectionId, setDraggingLooseConnectionId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
 
+  const clientToCanvas = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      return {
+        x: (clientX - rect.left - viewport.offsetX) / viewport.scale,
+        y: (clientY - rect.top - viewport.offsetY) / viewport.scale,
+      };
+    },
+    [viewport.offsetX, viewport.offsetY, viewport.scale],
+  );
+
   useEffect(() => {
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (draggingLooseConnectionId) {
+        const nodeId = (e.target as HTMLElement | null)?.closest?.('[data-node-id]')?.getAttribute('data-node-id');
+        const point = clientToCanvas(e.clientX, e.clientY);
+        if (nodeId) {
+          onLooseConnectionFinalize(draggingLooseConnectionId, nodeId);
+        } else {
+          onLooseConnectionDrag(draggingLooseConnectionId, point);
+        }
+        setDraggingLooseConnectionId(null);
+      }
       setDraggingNodeId(null);
       setDragStart(null);
       setPanning(false);
     };
     window.addEventListener('mouseup', handleMouseUp);
     return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [clientToCanvas, draggingLooseConnectionId, onLooseConnectionDrag, onLooseConnectionFinalize]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDraggingLooseConnectionId(null);
+        setDraggingNodeId(null);
+        setDragStart(null);
+        setPanning(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const getLayerColor = (layerId: string) => layers.find((l) => l.id === layerId)?.color ?? '#999';
 
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).dataset.type === 'node') return;
+    const targetType = (e.target as HTMLElement).dataset.type;
+    if (targetType === 'node' || targetType === 'connection' || targetType === 'connection-handle') return;
+    if (connectMode && pendingFromNodeId) {
+      const point = clientToCanvas(e.clientX, e.clientY);
+      onCreateLooseConnection(pendingFromNodeId, point);
+      return;
+    }
     setPanning(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     onDeselect();
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (draggingLooseConnectionId) {
+      const point = clientToCanvas(e.clientX, e.clientY);
+      onLooseConnectionDrag(draggingLooseConnectionId, point);
+      return;
+    }
     if (draggingNodeId && dragStart) {
       const dx = (e.clientX - dragStart.x) / viewport.scale;
       const dy = (e.clientY - dragStart.y) / viewport.scale;
@@ -102,16 +159,30 @@ export default function Canvas({
 
   const connectionPoints = (connection: Connection) => {
     const fromNode = allNodes.find((n) => n.id === connection.fromNodeId);
-    const toNode = allNodes.find((n) => n.id === connection.toNodeId);
-    if (!fromNode || !toNode) return null;
+    if (!fromNode) return null;
     const fromPos = nodePosition(fromNode);
-    const toPos = nodePosition(toNode);
-    return {
-      x1: fromPos.x + NODE_WIDTH / 2,
-      y1: fromPos.y + NODE_HEIGHT / 2,
-      x2: toPos.x + NODE_WIDTH / 2,
-      y2: toPos.y + NODE_HEIGHT / 2,
-    };
+    const toNode = connection.toNodeId ? allNodes.find((n) => n.id === connection.toNodeId) : null;
+    if (connection.toNodeId) {
+      if (!toNode) return null;
+      const toPos = nodePosition(toNode);
+      return {
+        x1: fromPos.x + NODE_WIDTH / 2,
+        y1: fromPos.y + NODE_HEIGHT / 2,
+        x2: toPos.x + NODE_WIDTH / 2,
+        y2: toPos.y + NODE_HEIGHT / 2,
+        loose: false,
+      };
+    }
+    if (connection.looseEnd) {
+      return {
+        x1: fromPos.x + NODE_WIDTH / 2,
+        y1: fromPos.y + NODE_HEIGHT / 2,
+        x2: connection.looseEnd.x * viewport.scale + viewport.offsetX,
+        y2: connection.looseEnd.y * viewport.scale + viewport.offsetY,
+        loose: true,
+      };
+    }
+    return null;
   };
 
   return (
@@ -129,20 +200,38 @@ export default function Canvas({
           if (!points) return null;
           const isSelected = selectedConnectionId === connection.id;
           return (
-            <line
-              key={connection.id}
-              x1={points.x1}
-              y1={points.y1}
-              x2={points.x2}
-              y2={points.y2}
-              stroke="#111827"
-              strokeWidth={isSelected ? 3 : 2}
-              markerEnd="url(#arrow)"
-              onClick={(e) => {
-                e.stopPropagation();
-                onConnectionClick(connection.id);
-              }}
-            />
+            <g key={connection.id}>
+              <line
+                data-type="connection"
+                x1={points.x1}
+                y1={points.y1}
+                x2={points.x2}
+                y2={points.y2}
+                stroke="#111827"
+                strokeWidth={isSelected ? 3 : 2}
+                markerEnd="url(#arrow)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConnectionClick(connection.id);
+                }}
+              />
+              {points.loose && connection.looseEnd && (
+                <circle
+                  className="connection-handle"
+                  data-type="connection-handle"
+                  cx={points.x2}
+                  cy={points.y2}
+                  r={8}
+                  fill="#111827"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setDraggingLooseConnectionId(connection.id);
+                    onConnectionClick(connection.id);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
+            </g>
           );
         })}
         <defs>
@@ -161,6 +250,7 @@ export default function Canvas({
               key={node.id}
               className={`node ${isSelected ? 'selected' : ''}`}
               data-type="node"
+              data-node-id={node.id}
               style={{ transform: `translate(${x}px, ${y}px)`, borderColor: getLayerColor(node.layerId) }}
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
               onClick={(e) => {

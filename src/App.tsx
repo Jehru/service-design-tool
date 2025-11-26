@@ -95,7 +95,7 @@ function App() {
     const validNodeIds = new Set(remainingNodes.map((n) => n.id));
     setLayers(remaining);
     setNodes(remainingNodes);
-    setConnections((prev) => prev.filter((c) => validNodeIds.has(c.fromNodeId) && validNodeIds.has(c.toNodeId)));
+    setConnections((prev) => prev.filter((c) => validNodeIds.has(c.fromNodeId) && (!c.toNodeId || validNodeIds.has(c.toNodeId))));
     const nextSelected = remaining[0].id;
     setSelectedLayerId(nextSelected);
   };
@@ -152,6 +152,7 @@ function App() {
   const handleSelectConnection = (id: string) => {
     setSelectedNodeId(null);
     setSelectedConnectionId(id);
+    setPendingFromNode(null);
   };
 
   const handleCreateConnection = (fromId: string, toId: string) => {
@@ -160,6 +161,37 @@ function App() {
     if (exists) return;
     const connection: Connection = { id: crypto.randomUUID(), fromNodeId: fromId, toNodeId: toId };
     setConnections((prev) => [...prev, connection]);
+  };
+
+  const handleCreateLooseConnection = (fromId: string, point: { x: number; y: number }) => {
+    const connection: Connection = { id: crypto.randomUUID(), fromNodeId: fromId, looseEnd: point };
+    setConnections((prev) => [...prev, connection]);
+    setSelectedConnectionId(connection.id);
+    setPendingFromNode(null);
+    setConnectMode(false);
+  };
+
+  const handleUpdateLooseConnection = (connectionId: string, point: { x: number; y: number }) => {
+    setConnections((prev) =>
+      prev.map((c) => (c.id === connectionId ? { ...c, looseEnd: point, toNodeId: c.toNodeId } : c)),
+    );
+  };
+
+  const handleFinalizeLooseConnection = (connectionId: string, toNodeId: string) => {
+    setConnections((prev) => {
+      const connection = prev.find((c) => c.id === connectionId);
+      if (!connection) return prev;
+      if (connection.fromNodeId === toNodeId) return prev;
+      const duplicate = prev.some(
+        (c) => c.id !== connectionId && c.fromNodeId === connection.fromNodeId && c.toNodeId === toNodeId,
+      );
+      if (duplicate) {
+        return prev.filter((c) => c.id !== connectionId);
+      }
+      return prev.map((c) => (c.id === connectionId ? { ...c, toNodeId, looseEnd: undefined } : c));
+    });
+    setPendingFromNode(null);
+    setConnectMode(false);
   };
 
   const handleCanvasNodeClick = (id: string) => {
@@ -211,8 +243,9 @@ function App() {
   const visibleNodes = nodes.filter((n) => visibleLayerIds.has(n.layerId));
   const visibleConnections = connections.filter((c) => {
     const fromLayer = nodes.find((n) => n.id === c.fromNodeId)?.layerId;
-    const toLayer = nodes.find((n) => n.id === c.toNodeId)?.layerId;
-    return fromLayer && toLayer && visibleLayerIds.has(fromLayer) && visibleLayerIds.has(toLayer);
+    const toLayer = c.toNodeId ? nodes.find((n) => n.id === c.toNodeId)?.layerId : null;
+    const toVisible = c.toNodeId ? (toLayer ? visibleLayerIds.has(toLayer) : false) : true;
+    return fromLayer && visibleLayerIds.has(fromLayer) && toVisible;
   });
 
   return (
@@ -257,6 +290,8 @@ function App() {
           nodes={visibleNodes}
           allNodes={nodes}
           connections={visibleConnections}
+          connectMode={connectMode}
+          pendingFromNodeId={pendingFromNode}
           selectedNodeId={selectedNodeId}
           selectedConnectionId={selectedConnectionId}
           viewport={viewport}
@@ -264,6 +299,9 @@ function App() {
           onNodeDrag={handleUpdateNodePosition}
           onNodeTextChange={handleUpdateNodeText}
           onConnectionClick={handleSelectConnection}
+          onCreateLooseConnection={handleCreateLooseConnection}
+          onLooseConnectionDrag={handleUpdateLooseConnection}
+          onLooseConnectionFinalize={handleFinalizeLooseConnection}
           onViewportChange={setViewport}
           onDeselect={() => {
             setSelectedNodeId(null);
