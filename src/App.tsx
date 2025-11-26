@@ -1,13 +1,13 @@
 /**
  * README (quickstart)
  * Run: npm install && npm run dev
- * Usage: use the left sidebar to manage layers (add/rename/delete/toggle visibility). Select a layer, then use "Add node" in the top toolbar to create sticky notes on that layer. Drag nodes to reposition them on the canvas. Toggle "Connect mode" to click two nodes and create a connection line. Use zoom controls or Ctrl + mouse wheel on the canvas to zoom/pan. Export/Import buttons let you save or load the current diagram as JSON.
+ * Usage: use the left sidebar to manage layers (add/rename/delete/toggle visibility). Select a layer, then use "Add node" in the top toolbar to create sticky notes on that layer. Drag nodes to reposition them on the canvas. Use connection handles on each node to drag out and create a connection line. Use zoom controls or Ctrl + mouse wheel on the canvas to zoom/pan. Export/Import buttons let you save or load the current diagram as JSON.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import SidebarLayers from './components/SidebarLayers';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
-import { Connection, DiagramState, Layer, NodeItem, Viewport } from './types';
+import { Connection, ConnectionHandle, DiagramState, Layer, NodeItem, Viewport } from './types';
 import './styles.css';
 
 const defaultLayers: Layer[] = [
@@ -46,8 +46,11 @@ function App() {
   const [selectedLayerId, setSelectedLayerId] = useState<string>(defaultLayers[0].id);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
-  const [connectMode, setConnectMode] = useState(false);
-  const [pendingFromNode, setPendingFromNode] = useState<string | null>(null);
+  const [activeConnectionDrag, setActiveConnectionDrag] = useState<{
+    fromNodeId: string;
+    handle: ConnectionHandle;
+    cursor: { x: number; y: number };
+  } | null>(null);
   const [viewport, setViewport] = useState<Viewport>(initialViewport);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -65,10 +68,9 @@ function App() {
         }
       }
       if (ev.key === 'Escape') {
-        setConnectMode(false);
-        setPendingFromNode(null);
         setSelectedNodeId(null);
         setSelectedConnectionId(null);
+        setActiveConnectionDrag(null);
       }
     };
     window.addEventListener('keydown', handleKey);
@@ -152,6 +154,7 @@ function App() {
   const handleSelectConnection = (id: string) => {
     setSelectedNodeId(null);
     setSelectedConnectionId(id);
+    setActiveConnectionDrag(null);
   };
 
   const handleCreateConnection = (fromId: string, toId: string) => {
@@ -163,18 +166,31 @@ function App() {
   };
 
   const handleCanvasNodeClick = (id: string) => {
-    if (!connectMode) {
-      handleSelectNode(id);
+    if (activeConnectionDrag) {
+      handleCreateConnection(activeConnectionDrag.fromNodeId, id);
+      setActiveConnectionDrag(null);
+      setSelectedNodeId(id);
       return;
     }
-    if (!pendingFromNode) {
-      setPendingFromNode(id);
-      handleSelectNode(id);
-    } else {
-      handleCreateConnection(pendingFromNode, id);
-      setPendingFromNode(null);
-      setConnectMode(false);
-    }
+    handleSelectNode(id);
+  };
+
+  const handleStartConnection = (
+    fromNodeId: string,
+    handle: ConnectionHandle,
+    cursor: { x: number; y: number },
+  ) => {
+    setSelectedConnectionId(null);
+    setActiveConnectionDrag({ fromNodeId, handle, cursor });
+    setSelectedNodeId(fromNodeId);
+  };
+
+  const handleUpdateConnectionCursor = (cursor: { x: number; y: number }) => {
+    setActiveConnectionDrag((prev) => (prev ? { ...prev, cursor } : prev));
+  };
+
+  const handleCancelConnection = () => {
+    setActiveConnectionDrag(null);
   };
 
   const handleZoom = (delta: number, anchor?: { x: number; y: number }) => {
@@ -196,6 +212,7 @@ function App() {
     setNodes(data.nodes);
     setConnections(data.connections);
     setViewport(data.viewport ?? initialViewport);
+    setActiveConnectionDrag(null);
     setSelectedLayerId(data.layers[0]?.id ?? defaultLayers[0].id);
   };
 
@@ -205,6 +222,7 @@ function App() {
     setLayers(preset);
     setNodes([]);
     setConnections([]);
+    setActiveConnectionDrag(null);
     setSelectedLayerId(preset[0]?.id ?? '');
   };
 
@@ -229,12 +247,6 @@ function App() {
       />
       <div className="main">
         <Toolbar
-          connectMode={connectMode}
-          onToggleConnectMode={() => {
-            setSelectedConnectionId(null);
-            setPendingFromNode(null);
-            setConnectMode((prev) => !prev);
-          }}
           onAddNode={handleAddNode}
           onZoomIn={() => handleZoom(0.1)}
           onZoomOut={() => handleZoom(-0.1)}
@@ -268,9 +280,13 @@ function App() {
           onDeselect={() => {
             setSelectedNodeId(null);
             setSelectedConnectionId(null);
-            setPendingFromNode(null);
+            handleCancelConnection();
           }}
           onWheelZoom={(delta, anchor) => handleZoom(delta, anchor)}
+          activeConnectionDrag={activeConnectionDrag}
+          onStartConnection={handleStartConnection}
+          onUpdateConnectionCursor={handleUpdateConnectionCursor}
+          onCancelConnection={handleCancelConnection}
         />
       </div>
     </div>

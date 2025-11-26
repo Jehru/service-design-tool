@@ -7,8 +7,6 @@ const presetOptions = [
 ];
 
 type Props = {
-  connectMode: boolean;
-  onToggleConnectMode: () => void;
   onAddNode: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -19,8 +17,6 @@ type Props = {
 };
 
 export default function Toolbar({
-  connectMode,
-  onToggleConnectMode,
   onAddNode,
   onZoomIn,
   onZoomOut,
@@ -48,9 +44,6 @@ export default function Toolbar({
     <div className="toolbar">
       <div className="toolbar-left">
         <button onClick={onAddNode}>Add node</button>
-        <button className={connectMode ? 'active' : ''} onClick={onToggleConnectMode}>
-          {connectMode ? 'Connecting…' : 'Connect mode'}
-        </button>
         <div className="preset">
           <label htmlFor="preset">Preset:</label>
           <select id="preset" onChange={(e) => onApplyPreset(e.target.value)} defaultValue="">
