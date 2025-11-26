@@ -9,6 +9,7 @@ import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
 import { Connection, DiagramState, Layer, NodeItem, Viewport } from './types';
 import './styles.css';
+import { pickHandleDirection } from './utils/handles';
 
 const defaultLayers: Layer[] = [
   { id: 'customer', name: 'Customer actions', color: '#f59e0b', visible: true },
@@ -158,7 +159,16 @@ function App() {
     if (fromId === toId) return;
     const exists = connections.some((c) => c.fromNodeId === fromId && c.toNodeId === toId);
     if (exists) return;
-    const connection: Connection = { id: crypto.randomUUID(), fromNodeId: fromId, toNodeId: toId };
+    const fromNode = nodes.find((n) => n.id === fromId);
+    const toNode = nodes.find((n) => n.id === toId);
+    if (!fromNode || !toNode) return;
+    const connection: Connection = {
+      id: crypto.randomUUID(),
+      fromNodeId: fromId,
+      toNodeId: toId,
+      fromHandle: pickHandleDirection(fromNode, toNode),
+      toHandle: pickHandleDirection(toNode, fromNode),
+    };
     setConnections((prev) => [...prev, connection]);
   };
 
