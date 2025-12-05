@@ -13,10 +13,14 @@ export type NodeItem = {
   text: string;
 };
 
+export type HandleDirection = 'top' | 'right' | 'bottom' | 'left';
+
 export type Connection = {
   id: string;
   fromNodeId: string;
   toNodeId: string;
+  fromHandle?: HandleDirection;
+  toHandle?: HandleDirection;
   label?: string;
 };
 

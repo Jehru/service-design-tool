@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Connection, Layer, NodeItem, Viewport } from '../types';
-
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 120;
+import { NODE_HEIGHT, NODE_WIDTH } from '../constants';
+import { Connection, HandleDirection, Layer, NodeItem, Viewport } from '../types';
+import { handleOffsets, pickHandleDirection } from '../utils/handles';
 
 type Props = {
   layers: Layer[];
@@ -100,17 +99,26 @@ export default function Canvas({
     y: node.y * viewport.scale + viewport.offsetY,
   });
 
+  const scaledHandleOffset = (handle: HandleDirection) => ({
+    x: handleOffsets[handle].x * viewport.scale,
+    y: handleOffsets[handle].y * viewport.scale,
+  });
+
   const connectionPoints = (connection: Connection) => {
     const fromNode = allNodes.find((n) => n.id === connection.fromNodeId);
     const toNode = allNodes.find((n) => n.id === connection.toNodeId);
     if (!fromNode || !toNode) return null;
     const fromPos = nodePosition(fromNode);
     const toPos = nodePosition(toNode);
+    const fromHandle = connection.fromHandle ?? pickHandleDirection(fromNode, toNode);
+    const toHandle = connection.toHandle ?? pickHandleDirection(toNode, fromNode);
+    const fromOffset = scaledHandleOffset(fromHandle);
+    const toOffset = scaledHandleOffset(toHandle);
     return {
-      x1: fromPos.x + NODE_WIDTH / 2,
-      y1: fromPos.y + NODE_HEIGHT / 2,
-      x2: toPos.x + NODE_WIDTH / 2,
-      y2: toPos.y + NODE_HEIGHT / 2,
+      x1: fromPos.x + fromOffset.x,
+      y1: fromPos.y + fromOffset.y,
+      x2: toPos.x + toOffset.x,
+      y2: toPos.y + toOffset.y,
     };
   };
 
